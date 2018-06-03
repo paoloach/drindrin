@@ -1,0 +1,5 @@
+button/firmware/build
+button/firmware/cmake-build-debug-esp2866
+button/firmware/cmake-build-debug
+button/firmware/firmware
+button/firmware/.idea
