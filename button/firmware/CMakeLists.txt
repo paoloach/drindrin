@@ -5,13 +5,15 @@ set(CMAKE_CXX_STANDARD 11)
 
 # Flash size in megabits
 # Valid values are same as for esptool.py - 2,4,8,16,32
-SET(FLASH_SIZE, 16)
+SET(FLASH_SIZE 512KB)
 
 # Flash mode, valid values are same as for esptool.py - qio,qout,dio.dout
-SET(FLASH_MODE, qio)
+SET(FLASH_MODE qio)
 
 # Flash speed in MHz, valid values are same as for esptool.py - 80, 40, 26, 20
-set(FLASH_SPEED, 40)
+set(FLASH_SPEED 40)
+
+set(ESPPORT /dev/ttyUSB0 )
 
 # set this to 0 if you don't need floating point support in printf/scanf
 # this will save approx 14.5KB flash space and 448 bytes of statically allocated
@@ -21,7 +23,8 @@ set(FLASH_SPEED, 40)
 set(PRINTF_SCANF_FLOAT_SUPPORT, 1)
 
 
-set(PROGRAM_SRC main.c wificfg.c)
+set(PROGRAM_SRC wificfg.c)
+
 
 set(ESP_OPEN_RTOS_DIR /home/paolo/esp2866/esp-open-rtos)
 file(GLOB LWIP_SRC ${ESP_OPEN_RTOS_DIR}/lwip)
@@ -118,7 +121,6 @@ add_custom_command(TARGET remove
         )
 
 add_custom_target(rename)
-
 add_custom_command(TARGET rename
         POST_BUILD
         COMMENT "Rename phase"
@@ -128,8 +130,25 @@ add_custom_command(TARGET rename
         COMMAND ${CMAKE_OBJCOPY} --redefine-syms ${ESP_OPEN_RTOS_DIR}/lib/allsymbols.rename --weaken sdklib/libpp_stage1.a sdklib/libpp.a
         COMMAND ${CMAKE_OBJCOPY} --redefine-syms ${ESP_OPEN_RTOS_DIR}/lib/allsymbols.rename --weaken sdklib/libwpa_stage1.a sdklib/libwpa.a
         )
+
+add_custom_target(createImage)
+add_custom_command(TARGET createImage
+        POST_BUILD
+        COMMENT "create image for ESP2866"
+        COMMAND esptool.py elf2image --version=2 -fs ${FLASH_SIZE} -fm ${FLASH_MODE} -ff ${FLASH_SPEED}m firmware -o firmware.bin
+        )
+
+add_custom_target(flash)
+add_custom_command(TARGET flash
+        POST_BUILD
+        COMMENT "Flash esp2866"
+        COMMAND esptool.py -p ${ESPPORT} --baud 115200 write_flash -fs ${FLASH_SIZE} -fm ${FLASH_MODE} -ff ${FLASH_SPEED}m  0x0  ${ESP_OPEN_RTOS_DIR}/bootloader/firmware_prebuilt/rboot.bin 0x1000  ${ESP_OPEN_RTOS_DIR}/bootloader/firmware_prebuilt/blank_config.bin 0x2000 firmware.bin
+        )
+
 add_dependencies(rename remove)
 add_dependencies(firmware rename)
+add_dependencies(createImage firmware)
+add_dependencies(flash createImage)
 
 target_link_libraries(firmware
         -Wl,--start-group
@@ -286,6 +305,7 @@ target_include_directories(program PUBLIC
         ${LWIP_INCLUDE}
         ${ESP_OPEN_RTOS_DIR}/core/include
         ${ESP_OPEN_RTOS_DIR}/include
+        ${OPEN_ESPLISBS}/include
         ${FREE_RTOS}/include
         ${ESP_OPEN_RTOS_DIR}/extras
         ${FREE_RTOS}/portable/esp8266/

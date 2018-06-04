@@ -28,6 +28,9 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
+#include <sdk_internal.h>
+#include <esplibs/libmain.h>
+
 #include "lwip/sockets.h"
 
 #include "wificfg/wificfg.h"
@@ -95,11 +98,70 @@ static const wificfg_dispatch dispatch_list[] = {
     {NULL, HTTP_METHOD_ANY, NULL}
 };
 
+extern uint32_t  flash_size;
+extern uint8_t    memoryType;
+
+#define SPI_BASE 0x60000200
+#define SPI(i) (*(struct SPI_REGS *)(0x60000200 - (i)*0x100))
+
 void user_init(void)
 {
+    uint32_t buf32[sizeof(struct sdk_g_ic_saved_st) / 4];
+    uint8_t *buf8 = (uint8_t *)buf32;
+
     uart_set_baud(0, 115200);
     printf("SDK version:%s\n", sdk_system_get_sdk_version());
 
+
+
+    SPI(0).USER0 |= SPI_USER0_CS_SETUP;
+    if ( sdk_SPIRead(0, buf32, 4) == SPI_FLASH_RESULT_OK) { ;
+        memoryType = buf8[3] >> 4;
+
+        printf("Data: ");
+        for (uint8_t i = 0; i < 5; i++)
+            printf("%d = %02X ", i, (uint32_t) (buf8[i]));
+        printf("\n");
+
+        switch (buf8[3] >> 4) {
+            case 0x0:   // 4 Mbit (512 KByte)
+                flash_size = 524288;
+                break;
+            case 0x1:  // 2 Mbit (256 Kbyte)
+                flash_size = 262144;
+                break;
+            case 0x2:  // 8 Mbit (1 Mbyte)
+                flash_size = 1048576;
+                break;
+            case 0x3:  // 16 Mbit (2 Mbyte)
+            case 0x5:  // 16 Mbit (2 Mbyte)
+                flash_size = 2097152;
+                break;
+            case 0x4:  // 32 Mbit (4 Mbyte)
+            case 0x6:  // 32 Mbit (4 Mbyte)
+                flash_size = 4194304;
+                break;
+            case 0x8:  // 64 Mbit (8 Mbyte)
+                flash_size = 8388608;
+                break;
+            case 0x9:  // 128 Mbit (16 Mbyte)
+                flash_size = 16777216;
+                break;
+            default:   // Invalid -- Assume 4 Mbit (512 KByte)
+                flash_size = 524288;
+        }
+        uint32_t sysparam_addr = flash_size - (5 + DEFAULT_SYSPARAM_SECTORS) * sdk_flashchip.sector_size;
+        sysparam_status_t status = sysparam_init(sysparam_addr, flash_size);
+        if (status == SYSPARAM_NOTFOUND) {
+            status = sysparam_create_area(sysparam_addr, DEFAULT_SYSPARAM_SECTORS, false);
+            if (status == SYSPARAM_OK) {
+                status = sysparam_init(sysparam_addr, 0);
+            }
+        }
+        printf("Flash type (%d), size: %d\n", memoryType, flash_size);
+    } else {
+        printf("Error reading from SPI\n");
+    }
     sdk_wifi_set_sleep_type(WIFI_SLEEP_MODEM);
 
     wificfg_init(80, dispatch_list);
