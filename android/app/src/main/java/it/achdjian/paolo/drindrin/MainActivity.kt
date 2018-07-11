@@ -37,24 +37,28 @@ class MainActivity : AppCompatActivity(), TextWatcher {
         val service = Intent(this, TcpServer::class.java)
 
         val preference =PreferenceManager.getDefaultSharedPreferences(this)
-        val preferedTone = preference.getInt(Constants.SHARED_PREFERENCE_TONE_ID, 0)
+        val preferedTone = preference.getString(Constants.SHARED_PREFERENCE_TONE_ID, "")
+        val preferedDuration = preference.getLong(Constants.SHARED_PREFERENCE_TONE_DURATION, 10000)
+        duration.setText((preferedDuration/1000).toString())
         val ringtoneManager = RingtoneManager(this)
         val cursor = ringtoneManager.cursor
         while (!cursor.isAfterLast) {
             val radioButton = RadioButton(this)
             radioButton.text = cursor.getString(RingtoneManager.TITLE_COLUMN_INDEX)
             val id =cursor.getInt(RingtoneManager.ID_COLUMN_INDEX)
-            radioButton.tag = id
-            radioButton.isChecked = id == preferedTone
+            radioButton.tag = cursor.getString(RingtoneManager.URI_COLUMN_INDEX)+ "/$id"
             radioButton.setOnClickListener {
                 val edit = preference.edit()
-                edit.putInt(Constants.SHARED_PREFERENCE_TONE_ID, it.tag as Int)
+                Log.i("setup", "set toneId: ${it.tag}")
+                edit.putString(Constants.SHARED_PREFERENCE_TONE_ID, it.tag as String)
                 edit.apply()
             }
             radiouGroup.addView(radioButton)
 
             cursor.moveToNext()
         }
+        val prefered = radiouGroup.findViewWithTag<RadioButton>(preferedTone);
+        prefered?.isChecked=true
         startService(service)
 
     }

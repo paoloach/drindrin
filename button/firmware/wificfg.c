@@ -44,6 +44,7 @@ enum Status {
 #define BUTTON_PIN 4
 
 enum Status status=GETTING_IP;
+enum Status oldStatus=GETTING_IP;
 
 void buttonTask(void *pvParameters)
 {
@@ -52,6 +53,10 @@ void buttonTask(void *pvParameters)
     gpio_enable(BUTTON_PIN, GPIO_INPUT);
     gpio_set_pullup(BUTTON_PIN, true, true);
     while(1) {
+        if (status != oldStatus) {
+            printf("Status: %d\n", status);
+            oldStatus = status;
+        }
         switch(status){
             case GETTING_IP:{
                 if (sdk_wifi_station_get_connect_status() == STATION_GOT_IP){
@@ -67,21 +72,24 @@ void buttonTask(void *pvParameters)
                 break;
             }
             case CONNECT: {
+                status = CONNECTING;
                 tcpPcb = tcp_new();
                 if (tcpPcb == NULL) {
                     printf("null tcp_pcb\n");
-                    return;
+                    status = WAIT_PRESS;
+                    break;
                 }
                 tcp_err(tcpPcb, tcpErr);
                 tcp_sent(tcpPcb, tcpSent);
 
-                status = CONNECTING;
-                IP4_ADDR(&addr, 192, 168, 43, 1);
+
+                IP4_ADDR(&addr, 192, 168, 1, 105);
                 err_t conRes = tcp_connect(tcpPcb, &addr, 6789, tcpConnect);
                 if (conRes != ERR_OK) {
                     printf("%d\n",__LINE__);
                     printf("Error calling connection: %d", conRes);
-                    return;
+                    status = WAIT_PRESS;
+                    break;
                 }
                 break;
             }
@@ -89,12 +97,14 @@ void buttonTask(void *pvParameters)
                     err_t writRes = tcp_write(tcpPcb, "DrinDrin", 8, 0);
                     if (writRes != ERR_OK) {
                         printf("Error writing data: %d", writRes);
-                        return;
+                        status = WAIT_PRESS;
+                        break;
                     }
                     err_t outRes = tcp_output(tcpPcb);
                     if (outRes != ERR_OK) {
                         printf("Error output data: %d", outRes);
-                        return;
+                        status = WAIT_PRESS;
+                        break;
                     }
                     status = SENDING;
                 }
@@ -104,6 +114,7 @@ void buttonTask(void *pvParameters)
                 tcp_close(tcpPcb);
                 status = WAIT_PRESS;
                 sys_unlock_tcpip_core();
+                vTaskDelay(1000 / portTICK_PERIOD_MS);
                 break;
             }
         }
@@ -112,11 +123,13 @@ void buttonTask(void *pvParameters)
 }
 
 err_t tcpConnect(void *arg, struct tcp_pcb *tpcb, err_t err){
+    printf("tcpConnect: %d\n", err);
     if (err == ERR_OK){
         status = CONNECTED;
     } else {
-        status = ERROR;
-        printf("Error connecting: %d", err);
+        status = WAIT_PRESS;
+        printf("Error connecting...: %d\n", err);
+        printf("status: %d\n", status);
     }
     return ERR_OK;
 }
@@ -146,5 +159,6 @@ void user_init(void)
 
 static void tcpErr(void * arg, err_t err) {
     printf("Error connecting: %d\n", err);
+    status = WAIT_PRESS;
 }
 

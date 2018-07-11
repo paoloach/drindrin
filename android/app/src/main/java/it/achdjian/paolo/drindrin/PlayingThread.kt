@@ -16,15 +16,6 @@ import android.util.Log
  */
 class PlayingThread(val context: Context) :Thread() {
     private lateinit var handler: Handler
-    private var alert: Uri
-    private val duration: Long
-    init {
-        val preferenceManager = PreferenceManager.getDefaultSharedPreferences(context)
-        duration = preferenceManager.getLong(Constants.SHARED_PREFERENCE_TONE_DURATION, 10000)
-        val toneId = preferenceManager.getInt(Constants.SHARED_PREFERENCE_TONE_ID, 0)
-        alert = RingtoneManager(context).getRingtoneUri(toneId)
-        Log.i("server", "ringtone: $alert")
-    }
 
     override fun run() {
         Looper.prepare()
@@ -33,6 +24,13 @@ class PlayingThread(val context: Context) :Thread() {
     }
 
     fun startPlay() {
+        val preferenceManager =  PreferenceManager.getDefaultSharedPreferences(context)
+        val duration = preferenceManager.getLong(Constants.SHARED_PREFERENCE_TONE_DURATION, 10000)
+        val toneId = preferenceManager.getString(Constants.SHARED_PREFERENCE_TONE_ID, "")
+        Log.i("server", "toneId: $toneId")
+        val alert =Uri.parse( toneId)// RingtoneManager(context).getRingtoneUri(toneId)
+        Log.i("server", "Playing $alert")
+
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
         val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
